@@ -19,14 +19,7 @@ package org.openqa.selenium.remote.server;
 
 import org.openqa.selenium.Platform;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.internal.Base64Encoder;
 import org.openqa.selenium.support.events.AbstractWebDriverEventListener;
-
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-
-import javax.imageio.ImageIO;
 
 class SnapshotScreenListener extends AbstractWebDriverEventListener {
 
@@ -46,15 +39,15 @@ class SnapshotScreenListener extends AbstractWebDriverEventListener {
     try {
       workAroundD3dBugInVista();
 
-      Rectangle size = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
-      BufferedImage image = new Robot().createScreenCapture(size);
+//      Rectangle size = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
+//      BufferedImage image = new Robot().createScreenCapture(size);
 
-      ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-      ImageIO.write(image, "png", outputStream);
+//      ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+//      ImageIO.write(image, "png", outputStream);
 
-      encoded = new Base64Encoder().encode(outputStream.toByteArray());
+//      encoded = Base64.getEncoder().encodeToString(outputStream.toByteArray());
 
-      session.attachScreenshot(encoded);
+//      session.attachScreenshot(encoded);
     } catch (Throwable e) {
       // Alright. No screen shot. Propogate the original exception
     }
