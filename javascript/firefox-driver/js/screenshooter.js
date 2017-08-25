@@ -21,11 +21,30 @@ goog.require('fxdriver.moz');
 
 
 fxdriver.screenshot.grab = function(window) {
+  var LOG_ = fxdriver.logging.getLogger(
+      'fxdriver.screenshooter');
+
+  var retina = false;
+
   var document = window.document;
   var documentElement = document.documentElement;
   if (!documentElement) {
     throw new Error('Page is not loaded yet, try later');
   }
+
+  if (window.thum_io_retina) {
+    retina = true;
+  }
+
+  goog.log.info(LOG_,
+      'here: ' + retina + ' ' + document + ' ' + window.thum_io_retina + ' ' + window['thum_io_retina'] + ' ' + document.getElementById('thum_io_retina'));
+
+  var ratio = 1;
+
+  if (retina) {
+    ratio = 2;
+  }
+
   var canvas = document.getElementById('fxdriver-screenshot-canvas');
   if (canvas == null) {
     canvas = document.createElement('canvas');
@@ -37,7 +56,11 @@ fxdriver.screenshot.grab = function(window) {
   if (document.body && document.body.scrollWidth > width) {
     width = document.body.scrollWidth;
   }
-  var height = documentElement.scrollHeight;
+
+  width = width * ratio;
+
+
+  var height = documentElement.scrollHeight * ratio;
   if (document.body && document.body.scrollHeight > height) {
     height = document.body.scrollHeight;
   }
@@ -67,6 +90,7 @@ fxdriver.screenshot.grab = function(window) {
     throw new Error('Unable to get context - ' + e);
   }
   try {
+    context.scale(ratio, ratio);
     context.drawWindow(window, 0, 0, width, height, 'rgb(255,255,255)');
   } catch (e) {
     throw new Error('Unable to draw window - ' + e);
