@@ -89,6 +89,12 @@ public class FirefoxDriver extends RemoteWebDriver implements Killable {
     public static final String BROWSER_PROFILE = "webdriver.firefox.profile";
 
     /**
+     * System property to tell engine to merge incoming profile with default profile rather than
+     * ignoring the default profile
+     */
+    public static final String MERGE_BROWSER_PROFILE = "webdriver.firefox.profile.merge";
+
+    /**
      * System property that defines the location of the webdriver.xpi browser extension to install
      * in the browser. If not set, the prebuilt extension bundled with this class will be used.
      */
@@ -277,8 +283,16 @@ public class FirefoxDriver extends RemoteWebDriver implements Killable {
   private static FirefoxProfile getProfile(FirefoxProfile profile) {
     FirefoxProfile profileToUse = profile;
     String suggestedProfile = System.getProperty(SystemProperty.BROWSER_PROFILE);
-    if (profileToUse == null && suggestedProfile != null) {
-      profileToUse = new ProfilesIni().getProfile(suggestedProfile);
+    boolean mergeProfile = "1".equals(System.getProperty(SystemProperty.MERGE_BROWSER_PROFILE));
+    if ((profileToUse == null || mergeProfile) && suggestedProfile != null) {
+      FirefoxProfile template = new ProfilesIni().getProfile(suggestedProfile);
+      if (profileToUse != null && template !=null && mergeProfile) {
+        profile.getAdditionalPreferences().addTo(template);
+        profileToUse = template;
+      } else {
+        profileToUse = template;
+      }
+
       if (profileToUse == null) {
         throw new WebDriverException(String.format(
             "Firefox profile '%s' named in system property '%s' not found",
