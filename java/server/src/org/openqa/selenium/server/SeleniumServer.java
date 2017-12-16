@@ -405,11 +405,9 @@ public class SeleniumServer implements SslCertificateGenerator, GridNodeServer {
     if (sessionTimeout == 0) {
       sessionTimeout = -1;
     }
-    long browserTimeout = configuration.getBrowserTimeoutInMs();
+    long browserTimeout = configuration.getBrowserTimeoutInSeconds();
     if (browserTimeout == 0) {
       browserTimeout = -1;
-    } else {
-      browserTimeout /= 1000;
     }
     webdriverContext.setInitParameter("webdriver.server.session.timeout", String.valueOf(sessionTimeout));
     webdriverContext.setInitParameter("webdriver.server.browser.timeout", String.valueOf(browserTimeout));
@@ -1022,6 +1020,8 @@ public class SeleniumServer implements SslCertificateGenerator, GridNodeServer {
         configuration.setDebugURL(getArg(args, ++i));
       } else if ("-timeout".equalsIgnoreCase(arg)) {
         configuration.setTimeoutInSeconds(Integer.parseInt(getArg(args, ++i)));
+      } else if ("-browserTimeout".equalsIgnoreCase(arg)) {
+        configuration.setBrowserTimeoutInSeconds(Integer.parseInt(getArg(args, ++i)));
       } else if ("-jettyThreads".equalsIgnoreCase(arg)) {
         int jettyThreadsCount = Integer.parseInt(getArg(args, ++i));
 

@@ -70,7 +70,7 @@ public class RemoteControlConfiguration {
   private String forcedBrowserMode;
   private boolean honorSystemProxy;
   private int timeoutInSeconds;
-  private int browserTimeoutInMs;
+  private int browserTimeoutInSeconds;
   private int retryTimeoutInSeconds;
   private LoggingOptions loggingOptions;
   private boolean ensureCleanSession;
@@ -302,11 +302,16 @@ public class RemoteControlConfiguration {
   }
 
   public int getBrowserTimeoutInMs() {
-    return browserTimeoutInMs;
+    return browserTimeoutInSeconds * 1000;
   }
 
-  public void setBrowserTimeoutInMs(int browserTimeoutInMs) {
-    this.browserTimeoutInMs = browserTimeoutInMs;
+  public int getBrowserTimeoutInSeconds() {
+    return browserTimeoutInSeconds;
+  }
+
+
+  public void setBrowserTimeoutInSeconds(int browserTimeoutInSeconds) {
+    this.browserTimeoutInSeconds = browserTimeoutInSeconds;
   }
 
   public int getRetryTimeoutInSeconds() {
