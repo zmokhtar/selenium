@@ -247,7 +247,7 @@ public class ChromeDriver extends RemoteWebDriver
     try {
       Object
           visibleSize =
-          evaluate("({x:0,y:0,width:window.innerWidth,height:window.innerHeight})");
+          evaluate("({x:0,y:0,width:window.innerWidth,height:window.innerHeight, retina: typeof window.thum_io_retina})");
       Long visibleW = jsonValue(visibleSize, "result.value.width", Long.class);
       Long visibleH = jsonValue(visibleSize, "result.value.height", Long.class);
 
@@ -255,6 +255,7 @@ public class ChromeDriver extends RemoteWebDriver
       Long cw = jsonValue(contentSize, "contentSize.width", Long.class);
       Long ch = jsonValue(contentSize, "contentSize.height", Long.class);
 
+      boolean retina = jsonValue(visibleSize, "result.value.retina", String.class).equals("object");
               /*
                * In chrome 61, delivered one day after I wrote this comment, the method forceViewport was removed.
                * I commented it out here with the if(false), and hopefully wrote a working alternative in the else 8-/
@@ -277,7 +278,11 @@ public class ChromeDriver extends RemoteWebDriver
         parms = new HashMap<>();
         parms.put("width", cw);
         parms.put("height", ch);
-        parms.put("deviceScaleFactor", Long.valueOf(1));
+        if (retina) {
+          parms.put("deviceScaleFactor", 2L);
+        } else {
+          parms.put("deviceScaleFactor", 1L);
+        }
         parms.put("mobile", Boolean.FALSE);
         parms.put("fitWindow", Boolean.FALSE);
         send("Emulation.setDeviceMetricsOverride", parms);
