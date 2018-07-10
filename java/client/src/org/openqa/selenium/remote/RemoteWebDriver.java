@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.io.Closeables;
 
 import org.openqa.selenium.Alert;
 import org.openqa.selenium.Beta;
@@ -63,8 +64,21 @@ import org.openqa.selenium.remote.internal.WebElementToJsonConverter;
 import org.openqa.selenium.security.Credentials;
 import org.openqa.selenium.security.UserAndPassword;
 
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileFilter;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.URL;
+import java.nio.channels.FileChannel;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -107,6 +121,23 @@ public class RemoteWebDriver implements WebDriver, JavascriptExecutor,
 
   public RemoteWebDriver(CommandExecutor executor, Capabilities desiredCapabilities,
       Capabilities requiredCapabilities) {
+
+    if (desiredCapabilities.getCapability("copyProfile") != null) {
+      String profileDir = desiredCapabilities.getCapability("copyProfile").toString();
+      ArrayList args = (ArrayList) ((HashMap) desiredCapabilities.getCapability("goog:chromeOptions")).get("args");
+
+      Path chromeHomes = FileSystems.getDefault().getPath("/tmp/chromeHomes");
+      try {
+        Path tmpDir = Files.createTempDirectory(chromeHomes, "chromeProfile");
+        copyDirectory(new File(profileDir),
+                      tmpDir.toFile());
+        args.add("user-data-dir=" + tmpDir.toString());
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+
+    }
+
     this.executor = executor;
 
     init(desiredCapabilities, requiredCapabilities);
@@ -1131,4 +1162,123 @@ public class RemoteWebDriver implements WebDriver, JavascriptExecutor,
     return String.format("%s: %s on %s (%s)", getClass().getSimpleName(),
         caps.getBrowserName(), caps.getPlatform(), getSessionId());
   }
+
+  public static void copyDirectory(File srcDir, File destDir) throws IOException {
+      if (srcDir == null) {
+          throw new NullPointerException("Source must not be null");
+      }
+      if (destDir == null) {
+          throw new NullPointerException("Destination must not be null");
+      }
+      if (srcDir.exists() == false) {
+          throw new FileNotFoundException("Source '" + srcDir + "' does not exist");
+      }
+      if (srcDir.isDirectory() == false) {
+          throw new IOException("Source '" + srcDir + "' exists but is not a directory");
+      }
+      if (srcDir.getCanonicalPath().equals(destDir.getCanonicalPath())) {
+          throw new IOException("Source '" + srcDir + "' and destination '" + destDir + "' are the same");
+      }
+
+      // Cater for destination being directory within the source directory (see IO-141)
+      List<String> exclusionList = null;
+      if (destDir.getCanonicalPath().startsWith(srcDir.getCanonicalPath())) {
+          File[] srcFiles = srcDir.listFiles();
+          if (srcFiles != null && srcFiles.length > 0) {
+              exclusionList = new ArrayList<String>(srcFiles.length);
+              for (File srcFile : srcFiles) {
+                  File copiedFile = new File(destDir, srcFile.getName());
+                  exclusionList.add(copiedFile.getCanonicalPath());
+              }
+          }
+      }
+      doCopyDirectory(srcDir, destDir, null, true, exclusionList);
+  }
+
+  private static void doCopyDirectory(File srcDir, File destDir, FileFilter filter,
+          boolean preserveFileDate, List<String> exclusionList) throws IOException {
+      // recurse
+      File[] srcFiles = filter == null ? srcDir.listFiles() : srcDir.listFiles(filter);
+      if (srcFiles == null) {  // null if abstract pathname does not denote a directory, or if an I/O error occurs
+          throw new IOException("Failed to list contents of " + srcDir);
+      }
+      if (destDir.exists()) {
+          if (destDir.isDirectory() == false) {
+              throw new IOException("Destination '" + destDir + "' exists but is not a directory");
+          }
+      } else {
+          if (!destDir.mkdirs() && !destDir.isDirectory()) {
+              throw new IOException("Destination '" + destDir + "' directory cannot be created");
+          }
+      }
+      if (destDir.canWrite() == false) {
+          throw new IOException("Destination '" + destDir + "' cannot be written to");
+      }
+      for (File srcFile : srcFiles) {
+          File dstFile = new File(destDir, srcFile.getName());
+          if (exclusionList == null || !exclusionList.contains(srcFile.getCanonicalPath())) {
+              if (srcFile.isDirectory()) {
+                  doCopyDirectory(srcFile, dstFile, filter, preserveFileDate, exclusionList);
+              } else {
+                  doCopyFile(srcFile, dstFile, preserveFileDate);
+              }
+          }
+      }
+
+      // Do this last, as the above has probably affected directory metadata
+      if (preserveFileDate) {
+          destDir.setLastModified(srcDir.lastModified());
+      }
+  }
+  public static final long ONE_KB = 1024;
+
+  public static final long ONE_MB = ONE_KB * ONE_KB;
+
+  private static final long FILE_COPY_BUFFER_SIZE = ONE_MB * 30;
+
+
+  private static void doCopyFile(File srcFile, File destFile, boolean preserveFileDate) throws IOException {
+      if (destFile.exists() && destFile.isDirectory()) {
+          throw new IOException("Destination '" + destFile + "' exists but is a directory");
+      }
+
+      FileInputStream fis = null;
+      FileOutputStream fos = null;
+      FileChannel input = null;
+      FileChannel output = null;
+      try {
+          fis = new FileInputStream(srcFile);
+          fos = new FileOutputStream(destFile);
+          input  = fis.getChannel();
+          output = fos.getChannel();
+          long size = input.size();
+          long pos = 0;
+          long count = 0;
+          while (pos < size) {
+              count = size - pos > FILE_COPY_BUFFER_SIZE ? FILE_COPY_BUFFER_SIZE : size - pos;
+              pos += output.transferFrom(input, pos, count);
+          }
+      } finally {
+          closeQuietly(output);
+          closeQuietly(fos);
+          closeQuietly(input);
+          closeQuietly(fis);
+      }
+
+      if (srcFile.length() != destFile.length()) {
+          throw new IOException("Failed to copy full contents from '" +
+                  srcFile + "' to '" + destFile + "'");
+      }
+      if (preserveFileDate) {
+          destFile.setLastModified(srcFile.lastModified());
+      }
+  }
+
+  public static void closeQuietly(Closeable closeable) {
+    try {
+      Closeables.close(closeable, true);
+    } catch (IOException ignoted) {
+    }
+  }
+
 }
