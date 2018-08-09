@@ -114,6 +114,8 @@ public class RemoteWebDriver implements WebDriver, JavascriptExecutor,
 
   private int w3cComplianceLevel = 0;
 
+  File tmpProfile = null;
+
   // For cglib
   protected RemoteWebDriver() {
     init(new DesiredCapabilities(), null);
@@ -129,9 +131,13 @@ public class RemoteWebDriver implements WebDriver, JavascriptExecutor,
       Path chromeHomes = FileSystems.getDefault().getPath("/tmp/chromeHomes");
       try {
         Path tmpDir = Files.createTempDirectory(chromeHomes, "chromeProfile");
+        tmpProfile = tmpDir.toFile();
         copyDirectory(new File(profileDir),
-                      tmpDir.toFile());
+                      tmpProfile);
+
         args.add("user-data-dir=" + tmpDir.toString());
+
+        logger.info("Creating temporary profile at " + tmpProfile.toString());
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
@@ -558,7 +564,96 @@ public class RemoteWebDriver implements WebDriver, JavascriptExecutor,
     } finally {
       sessionId = null;
       stopClient();
+      if (tmpProfile != null) {
+        logger.info("cleaning up " + tmpProfile.toString());
+        try {
+          deleteDirectory(tmpProfile);
+        } catch (IOException | IllegalArgumentException e) {
+          logger.warning("Could not clean up profile " + tmpProfile.toString() + " " + e);
+        }
+      }
     }
+  }
+
+  public static void deleteDirectory(File directory) throws IOException {
+      if (!directory.exists()) {
+          return;
+      }
+
+      if (!isSymlink(directory)) {
+          cleanDirectory(directory);
+      }
+
+      if (!directory.delete()) {
+          String message =
+              "Unable to delete directory " + directory + ".";
+          throw new IOException(message);
+      }
+  }
+
+  public static void cleanDirectory(File directory) throws IOException {
+      if (!directory.exists()) {
+          String message = directory + " does not exist";
+          throw new IllegalArgumentException(message);
+      }
+
+      if (!directory.isDirectory()) {
+          String message = directory + " is not a directory";
+          throw new IllegalArgumentException(message);
+      }
+
+      File[] files = directory.listFiles();
+      if (files == null) {  // null if security restricted
+          throw new IOException("Failed to list contents of " + directory);
+      }
+
+      IOException exception = null;
+      for (File file : files) {
+          try {
+              forceDelete(file);
+          } catch (IOException ioe) {
+              exception = ioe;
+          }
+      }
+
+      if (null != exception) {
+          throw exception;
+      }
+  }
+
+  public static void forceDelete(File file) throws IOException {
+      if (file.isDirectory()) {
+          deleteDirectory(file);
+      } else {
+          boolean filePresent = file.exists();
+          if (!file.delete()) {
+              if (!filePresent){
+                  throw new FileNotFoundException("File does not exist: " + file);
+              }
+              String message =
+                  "Unable to delete file: " + file;
+              throw new IOException(message);
+          }
+      }
+  }
+
+  public static boolean isSymlink(File file) throws IOException {
+      if (file == null) {
+          throw new NullPointerException("File must not be null");
+      }
+      File fileInCanonicalDir = null;
+      if (file.getParent() == null) {
+          fileInCanonicalDir = file;
+      } else {
+          File canonicalDir = file.getParentFile().getCanonicalFile();
+          fileInCanonicalDir = new File(canonicalDir, file.getName());
+      }
+
+      if (fileInCanonicalDir.getCanonicalFile().equals(fileInCanonicalDir.getAbsoluteFile())) {
+          return false;
+      } else {
+          return true;
+      }
   }
 
   @SuppressWarnings({"unchecked"})
