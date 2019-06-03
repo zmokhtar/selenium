@@ -262,6 +262,8 @@ public class ChromeDriver extends RemoteWebDriver
                */
       Map<String, Object> parms;
 
+      long maxHeight = 16000;
+
       if (false) {
         parms = new HashMap<>();
         parms.put("width", cw);
@@ -280,6 +282,7 @@ public class ChromeDriver extends RemoteWebDriver
         parms.put("height", ch);
         if (retina) {
           parms.put("deviceScaleFactor", 2L);
+          maxHeight = maxHeight / 2;
         } else {
           parms.put("deviceScaleFactor", 1L);
         }
@@ -297,6 +300,21 @@ public class ChromeDriver extends RemoteWebDriver
       parms = new HashMap<>();
       parms.put("format", "png");
       parms.put("fromSurface", Boolean.TRUE);
+
+      if (ch > 16000) {
+        // https://github.com/GoogleChrome/puppeteer/issues/359
+        // https://groups.google.com/a/chromium.org/forum/#!topic/headless-dev/DqaAEXyzvR0/discussion
+        logger.log(Level.INFO, "setting viewport to be 16000 tall.");
+        HashMap<String, Object> viewport = new HashMap<>();
+        viewport.put("x", 0);
+        viewport.put("y", 0);
+        viewport.put("width", cw);
+        viewport.put("height", maxHeight);
+        viewport.put("scale", 1);
+
+        parms.put("clip", viewport);
+      }
+
       Object value = send("Page.captureScreenshot", parms);
 
       // Since chrome 61 this call has disappeared too; it does not seem to be necessary anymore with the new code.
@@ -309,8 +327,11 @@ public class ChromeDriver extends RemoteWebDriver
       parms.put("height", visibleH);
       send("Emulation.setVisibleSize", parms);
 
+      logger.log(Level.INFO, "Screenshoting screen size: " + cw + "x" + ch);
+
       String image = jsonValue(value, "data", String.class);
       byte[] bytes = Base64.getDecoder().decode(image);
+      logger.log(Level.INFO, "Returning screenshot with " + bytes.length + " bytes.");
       return outputType.convertFromPngBytes(bytes);
     } catch (IOException e) {
       logger.log(Level.SEVERE, "Could not take screenshot", e);
